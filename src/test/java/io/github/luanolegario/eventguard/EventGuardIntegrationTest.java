@@ -3,7 +3,7 @@ package io.github.luanolegario.eventguard;
 import io.github.luanolegario.eventguard.annotation.EventGuardListener;
 import io.github.luanolegario.eventguard.aop.EventGuardAspect;
 import io.github.luanolegario.eventguard.api.IdempotencyLockProvider;
-import io.github.luanolegario.eventguard.model.LockAcquisition;
+import io.github.luanolegario.eventguard.idempotency.RedisIdempotencyLockProvider;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,9 +23,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 import java.time.Duration;
-import java.time.Instant;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -47,18 +45,20 @@ class EventGuardIntegrationTest {
     @Autowired
     private DummyListener dummyListener;
 
-    @Autowired(required = false)
+    @Autowired
     private IdempotencyLockProvider idempotencyLockProvider;
 
-    @Autowired(required = false)
+    @Autowired
     private EventGuardAspect eventGuardAspect;
 
     @Test
     void shouldProcessIdenticalMessagesOnlyOnce() {
         assertThat(idempotencyLockProvider).isNotNull();
+        assertThat(idempotencyLockProvider).isInstanceOf(RedisIdempotencyLockProvider.class);
         assertThat(eventGuardAspect).isNotNull();
 
-        TestEvent duplicatedEvent = new TestEvent("evt-123", "payload");
+        String eventId = "evt-" + UUID.randomUUID();
+        TestEvent duplicatedEvent = new TestEvent(eventId, "payload");
 
         send(duplicatedEvent);
         send(duplicatedEvent);
@@ -91,28 +91,6 @@ class EventGuardIntegrationTest {
         @Bean
         DummyListener dummyListener() {
             return new DummyListener();
-        }
-
-        @Bean
-        IdempotencyLockProvider idempotencyLockProvider() {
-            return new InMemoryIdempotencyLockProvider();
-        }
-    }
-
-    static class InMemoryIdempotencyLockProvider implements IdempotencyLockProvider {
-
-        private final ConcurrentMap<String, String> locks = new ConcurrentHashMap<>();
-
-        @Override
-        public LockAcquisition tryAcquire(String key, Duration ttl) {
-            String token = "token-" + key;
-            boolean acquired = locks.putIfAbsent(key, token) == null;
-            return new LockAcquisition(acquired, acquired ? Instant.now().plus(ttl) : null, acquired ? token : null);
-        }
-
-        @Override
-        public void release(String key, String token) {
-            locks.remove(key, token);
         }
     }
 

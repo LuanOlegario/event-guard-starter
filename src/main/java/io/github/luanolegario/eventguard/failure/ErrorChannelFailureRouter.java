@@ -25,6 +25,7 @@ public final class ErrorChannelFailureRouter implements FailureRouter {
     private final ListableBeanFactory beanFactory;
 
     public ErrorChannelFailureRouter(ListableBeanFactory beanFactory) {
+        Assert.notNull(beanFactory, "beanFactory must not be null");
         this.beanFactory = beanFactory;
     }
 
@@ -41,7 +42,10 @@ public final class ErrorChannelFailureRouter implements FailureRouter {
         Message<Throwable> errorMessage = MessageBuilder.withPayload(failure.cause())
             .copyHeaders(buildHeaders(failure))
             .build();
-        messageChannel.send(errorMessage);
+        boolean accepted = messageChannel.send(errorMessage);
+        if (!accepted) {
+            throw new IllegalStateException("Failure message was rejected by channel: " + messageChannel);
+        }
     }
 
     private MessageChannel resolveChannel(String configuredChannel) {
@@ -65,4 +69,3 @@ public final class ErrorChannelFailureRouter implements FailureRouter {
         return headers;
     }
 }
-

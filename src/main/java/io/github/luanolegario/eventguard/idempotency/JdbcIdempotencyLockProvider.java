@@ -28,6 +28,8 @@ public final class JdbcIdempotencyLockProvider implements IdempotencyLockProvide
 
     private static final String INSERT_SQL =
         "INSERT INTO event_guard_locks (lock_key, token, expires_at) VALUES (?, ?, ?)";
+    private static final String TAKEOVER_EXPIRED_SQL =
+        "UPDATE event_guard_locks SET token = ?, expires_at = ? WHERE lock_key = ? AND expires_at <= ?";
     private static final String RELEASE_SQL =
         "DELETE FROM event_guard_locks WHERE lock_key = ? AND token = ?";
 
@@ -46,7 +48,8 @@ public final class JdbcIdempotencyLockProvider implements IdempotencyLockProvide
             throw new IllegalArgumentException("ttl must be greater than zero");
         }
 
-        Instant expiresAt = Instant.now().plus(ttl);
+        Instant now = Instant.now();
+        Instant expiresAt = now.plus(ttl);
         String token = UUID.randomUUID().toString();
         try {
             int updated = jdbcTemplate.update(INSERT_SQL, key, token, Timestamp.from(expiresAt));
@@ -55,6 +58,16 @@ public final class JdbcIdempotencyLockProvider implements IdempotencyLockProvide
             }
             return new LockAcquisition(false, null, null);
         } catch (DuplicateKeyException ex) {
+            int updated = jdbcTemplate.update(
+                TAKEOVER_EXPIRED_SQL,
+                token,
+                Timestamp.from(expiresAt),
+                key,
+                Timestamp.from(now)
+            );
+            if (updated == 1) {
+                return new LockAcquisition(true, expiresAt, token);
+            }
             return new LockAcquisition(false, null, null);
         }
     }
