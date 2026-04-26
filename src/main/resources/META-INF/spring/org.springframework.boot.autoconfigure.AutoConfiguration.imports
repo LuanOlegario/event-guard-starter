@@ -1,0 +1,5 @@
+io.github.luanolegario.eventguard.autoconfigure.EventGuardAutoConfiguration
+io.github.luanolegario.eventguard.autoconfigure.EventGuardRedisAutoConfiguration
+io.github.luanolegario.eventguard.autoconfigure.EventGuardJdbcAutoConfiguration
+io.github.luanolegario.eventguard.autoconfigure.EventGuardObservabilityAutoConfiguration
+io.github.luanolegario.eventguard.autoconfigure.EventGuardActuatorAutoConfiguration
