@@ -11,12 +11,14 @@ import io.github.luanolegario.eventguard.failure.NoOpDuplicateEventHandler;
 import io.github.luanolegario.eventguard.key.DefaultKeyNamespaceStrategy;
 import io.github.luanolegario.eventguard.key.DefaultSpelKeyEvaluator;
 import io.github.luanolegario.eventguard.metrics.EventGuardMetrics;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.ListableBeanFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
+import org.springframework.core.ResolvableType;
+import org.springframework.util.ClassUtils;
 
 @AutoConfiguration(after = {
     EventGuardRedisAutoConfiguration.class,
@@ -24,6 +26,8 @@ import org.springframework.context.annotation.Bean;
     EventGuardObservabilityAutoConfiguration.class
 })
 public class EventGuardAutoConfiguration {
+
+    private static final String TRACER_CLASS_NAME = "io.micrometer.tracing.Tracer";
 
     @Bean
     @ConditionalOnMissingBean(SpelKeyEvaluator.class)
@@ -40,7 +44,7 @@ public class EventGuardAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(FailureRouter.class)
     public FailureRouter failureRouter(ListableBeanFactory beanFactory) {
-        return new ErrorChannelFailureRouter(beanFactory);
+        return new ErrorChannelFailureRouter(beanFactory, resolveTracerProvider(beanFactory));
     }
 
     @Bean
@@ -68,5 +72,14 @@ public class EventGuardAutoConfiguration {
             keyNamespaceStrategy,
             eventGuardMetrics.getIfAvailable(EventGuardMetrics::noop)
         );
+    }
+
+    private static ObjectProvider<?> resolveTracerProvider(ListableBeanFactory beanFactory) {
+        try {
+            Class<?> tracerType = ClassUtils.forName(TRACER_CLASS_NAME, EventGuardAutoConfiguration.class.getClassLoader());
+            return beanFactory.getBeanProvider(ResolvableType.forClass(tracerType));
+        } catch (ClassNotFoundException | LinkageError ignored) {
+            return null;
+        }
     }
 }
